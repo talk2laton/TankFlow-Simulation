@@ -1,0 +1,109 @@
+clc; clear; close all;
+global Pressure
+X = [0,0,1,1,1.1, nan, 1.1,1, 1]; 
+Y = [1,0,0,0.08,0.08, nan, 0.12,0.12, 1];
+Pressure = 50; density = 1000; gravity = 9.8;
+figure('Color','w', 'Position', [2000 50 1700 900], 'keypressfcn',@fh_kpfcn);
+plot(X, Y, 'k', LineWidth = 5); hold on;
+h = 0.7; Xf = [0,0,1,1,1.1, 1.1,1, 1];
+Yf = [h,0,0,0.08,0.08, 0.12,0.12, h];
+fluid = fill(Xf, Yf, 'b', 'FaceAlpha',0.3);
+Xp1 = 0.1*[0,0,1,1]; Yp1 = 1.2+0.2*[1,0,0,1];
+Xp2 = 0.5*[0,nan,0,1,1]-0.5; Yp2 = 1.225+0.15*[1,nan,0,0,1];
+fill(Xp1, Yp1, 'w', 'LineWidth',3);
+fill(Xp2, Yp2, 'w', 'LineWidth',3);
+Ptext = text(-0.6, 1.3, ['$P = atm + ',num2str(Pressure),'$'],...
+           'Interpreter', 'Latex', 'FontSize',15);
+xs = linspace(1,0,201);
+ys = h + 0.05*sin(xs);
+t = 0; dt = 0.05;
+Bubbles1 = []; Bubbles2 = [];  Shines1 = []; Shines2 = [];
+yu = linspace(1.4, h-0.2, 101);
+yd = linspace(1.2, h-0.2, 101);
+v_in = sqrt(2*Pressure/density);
+xu = 0.1 + 1.05*v_in*sqrt(2*(1.4-yu)/gravity);
+xd = 0.1 + 0.95*v_in*sqrt(2*(1.2-yd)/gravity);
+FluidInFlow = fill([xu,flip(xd)], [yu,flip(yd)], 'b', 'FaceAlpha',0.3);
+v_out = sqrt(2*gravity*(h - 0.2));
+yu = linspace(0.12, -0.5, 101); yd = linspace(0.08, -0.5, 101);
+xu = 1.1 + 1.05*v_out*sqrt(2*(0.12-yu)/gravity); 
+xd = 1.1 + 0.95*v_out*sqrt(2*(0.08-yd)/gravity);
+FluidOutFlow = fill([xu,flip(xd)], [yu,flip(yd)], 'b', 'FaceAlpha',0.3);
+xout = linspace(-1.0,1.0,201); x = 0.5*(xu(end)+xd(end));
+yout = -0.5+(0.005*v_out*sin(3*pi*(xout+1)).^4).*exp(-xout.^2);
+Outflow = fill(x+xout, yout, 'b', 'FaceAlpha',0.3);
+axis([-1,3.5,-0.6,1.5]); grid on; axis equal;
+vidfile = VideoWriter('Flow.avi');
+open(vidfile);
+for i = 1:500
+    v_in = sqrt(2*Pressure/density);
+    dip = 0.5*v_in^2; h = h + 0.2*v_in*dt;
+    ym = linspace(1.3, h-1.5*dip, 101);
+    xm = 0.1 + v_in*sqrt(2*(1.3-ym)/gravity);
+    x = xm(end); Ptext.String = ['$P = atm + ',num2str(Pressure),'$'];
+    ys = max(0, h + 0.05*sin(7*xs - 3*t) - ....
+        dip*exp(-(500-Pressure)*(xs-x).^2).*(1 + 0.5*v_in*rand(size(xs))));
+    y = min(ys); fluid.XData = [Xf, xs]; fluid.YData = [Yf, ys];
+    Bubbles1 = UpdateBubbles(Bubbles1, xs, ys, dt);
+    yu = linspace(1.4, y-0.01, 101); yd = linspace(1.2, y-0.01, 101);
+    xu = 0.1 + 1.05*v_in*sqrt(2*(1.4-yu)/gravity); 
+    xd = 0.1 + 0.95*v_in*sqrt(2*(1.2-yd)/gravity);
+    FluidInFlow.XData = [xu,flip(xd)]; FluidInFlow.YData = [yu,flip(yd)];
+    Shines1 = UpdateShines(Shines1, xu, xd, yu, yd, dt);
+    for j = 1:10
+        bx = max(0,x + 0.1*(rand-0.5)); by = y + 0.3*(rand-0.5);
+        bu = 0.1*(rand-0.5); bv = -0.5*rand; br = 0.015*rand;
+        bubble = BubbleMaker(bx, by, bu, bv, br, xs, ys, 0.02);
+        Bubbles1 = [Bubbles1, bubble];
+        shine = ShineMaker(xu, xd, yu, yd, rand, rand, 0.1*rand);
+        Shines1 = [Shines1, shine];
+    end
+    v_out = sqrt(2*gravity*(h - 0.14));
+    h = h - 0.05*v_out*dt; t = t + dt;
+    yu = linspace(0.12, -0.5, 101); yd = linspace(0.08, -0.5, 101);
+    xu = 1.1 + 1.05*v_out*sqrt(2*(0.12-yu)/gravity); 
+    xd = 1.1 + 0.95*v_out*sqrt(2*(0.08-yd)/gravity);
+    x = 0.5*(xu(end)+xd(end));
+    FluidOutFlow.XData = [xu,flip(xd)]; FluidOutFlow.YData = [yu,flip(yd)];
+    Outflow.XData = x + xout; Outflow.YData = yout + 0.005*rand(size(yout));
+    Bubbles2 = UpdateBubbles(Bubbles2, 1.5 + xs, -0.5+0*ys, dt);
+    Shines2 = UpdateShines(Shines2, xu, xd, yu, yd, dt);
+    for j = 1:10
+        bx = max(0,x + 0.3*(rand-0.5)); by = -0.51;
+        bu = 0.1*(rand-0.5); bv = -0.5*rand; br = 0.015*rand;
+        bubble = BubbleMaker(bx, by, bu, bv, br, x + xout, yout, 0.02-0.5);
+        Bubbles2 = [Bubbles2, bubble];
+        shine = ShineMaker(xu, xd, yu, yd, rand, rand, 0.1*rand);
+        Shines2 = [Shines2, shine];
+    end
+    axis([-1,3.5,-0.6,1.5]); drawnow;
+    frame = getframe(gcf);
+    writeVideo(vidfile,frame);
+end
+close(vidfile);
+
+function Bubbles = UpdateBubbles(Bubbles, xs, ys, dt)
+    for i = numel(Bubbles):-1:1
+        bubble = Bubbles(i);
+        if(bubble.popped)
+            delete(bubble.bob);
+            Bubbles(i) = [];
+        else
+            bubble = bubble.Update(xs, ys, dt);
+            Bubbles(i) = bubble;
+        end
+    end
+end
+
+function Shines = UpdateShines(Shines, xu, xd, yu, yd, dt)
+    for i = numel(Shines):-1:1
+        shine = Shines(i);
+        if(shine.popped)
+            delete(shine.streak);
+            Shines(i) = [];
+        else
+            shine = shine.Update(xu, xd, yu, yd, dt);
+            Shines(i) = shine;
+        end
+    end
+end
